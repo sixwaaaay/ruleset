@@ -1,24 +1,91 @@
 use axum::{
-    Router,
-    routing::{get, post},
-    Json, response::IntoResponse,
+    Json, Router,
     http::StatusCode,
+    response::IntoResponse,
+    routing::{delete, get, post},
 };
-use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Mutex};
-use tokio::net::TcpListener;
+use ipnet::IpNet;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use std::str::FromStr;
+use thiserror::Error;
+use tokio::sync::Mutex;
+use tokio::{fs, net::TcpListener};
+
+const RULES_FILE: &str = "rules.json";
 
 // 使用全局变量存储规则
-static RULES: Lazy<Mutex<Vec<Rule>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static RULES: Lazy<Mutex<Vec<Rule>>> = Lazy::new(|| tokio::sync::Mutex::new(Vec::new()));
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+// 自定义错误类型
+#[derive(Error, Debug)]
+pub enum RuleError {
+    #[error("Invalid IP CIDR format: {0}")]
+    InvalidIpCidr(String),
+    #[error("Invalid domain format: {0}")]
+    InvalidDomain(String),
+    #[error("Invalid port number: {0}")]
+    InvalidPort(String),
+    #[error("Rule already exists")]
+    DuplicateRule,
+    #[error("Rule not found")]
+    RuleNotFound,
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+}
+
+// 实现自定义响应
+impl IntoResponse for RuleError {
+    fn into_response(self) -> axum::response::Response {
+        let status = match self {
+            RuleError::InvalidIpCidr(_) => StatusCode::BAD_REQUEST,
+            RuleError::InvalidDomain(_) => StatusCode::BAD_REQUEST,
+            RuleError::InvalidPort(_) => StatusCode::BAD_REQUEST,
+            RuleError::DuplicateRule => StatusCode::CONFLICT,
+            RuleError::RuleNotFound => StatusCode::NOT_FOUND,
+            RuleError::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            RuleError::JsonError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, self.to_string()).into_response()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 struct Rule {
     rule_type: RuleType,
     value: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+// 为Rule实现验证
+impl Rule {
+    fn validate(&self) -> Result<(), RuleError> {
+        match self.rule_type {
+            RuleType::IpCidr | RuleType::IpCidr6 | RuleType::SrcIpCidr => {
+                if IpNet::from_str(&self.value).is_err() {
+                    return Err(RuleError::InvalidIpCidr(self.value.clone()));
+                }
+            }
+            RuleType::Domain | RuleType::DomainSuffix | RuleType::DomainKeyword => {
+                if !is_valid_domain(&self.value) {
+                    return Err(RuleError::InvalidDomain(self.value.clone()));
+                }
+            }
+            RuleType::DstPort | RuleType::SrcPort | RuleType::InPort => {
+                if !is_valid_port(&self.value) {
+                    return Err(RuleError::InvalidPort(self.value.clone()));
+                }
+            }
+            _ => {} // 其他类型暂时不做验证
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 enum RuleType {
     Domain,
@@ -54,21 +121,57 @@ enum RuleType {
 
 // 处理获取规则列表的请求
 async fn get_rules() -> impl IntoResponse {
-    let rules = RULES.lock().unwrap();
-    
-    // 将规则转换为文本格式
+    let rules = RULES.lock().await;
     let mut text = String::new();
     for rule in rules.iter() {
         text.push_str(&format!("{},{}\n", rule.rule_type.to_string(), rule.value));
     }
-    
     text
 }
 
 // 处理添加新规则的请求
 async fn add_rule(Json(rule): Json<Rule>) -> impl IntoResponse {
-    RULES.lock().unwrap().push(rule);
-    StatusCode::CREATED
+    // 验证规则
+    if let Err(e) = rule.validate() {
+        return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
+    }
+
+    // 检查重复
+    let mut rules = RULES.lock().await;
+    if rules.contains(&rule) {
+        return (StatusCode::CONFLICT, "Rule already exists").into_response();
+    }
+
+    // 添加规则
+    rules.push(rule);
+    drop(rules); // 释放锁
+
+    // 持久化存储
+    if let Err(e) = save_rules().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    }
+
+    StatusCode::CREATED.into_response()
+}
+
+// 处理删除规则的请求
+async fn delete_rule(Json(rule): Json<Rule>) -> impl IntoResponse {
+    let mut rules = RULES.lock().await;
+    let len = rules.len();
+    rules.retain(|r| r != &rule);
+
+    if rules.len() == len {
+        return (StatusCode::NOT_FOUND, "Rule not found").into_response();
+    }
+
+    drop(rules); // 释放锁
+
+    // 持久化存储
+    if let Err(e) = save_rules().await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
 }
 
 impl std::fmt::Display for RuleType {
@@ -108,20 +211,70 @@ impl std::fmt::Display for RuleType {
     }
 }
 
+// 验证域名格式
+fn is_valid_domain(domain: &str) -> bool {
+    let domain_regex = Regex::new(r"^[a-zA-Z0-9][a-zA-Z0-9-_.]+[a-zA-Z0-9]$").unwrap();
+    domain_regex.is_match(domain)
+}
+
+// 验证端口格式
+fn is_valid_port(port: &str) -> bool {
+    match port.parse::<u16>() {
+        Ok(_) => true,
+        Err(_) => {
+            // 检查是否是端口范围格式 (例如: 80-443)
+            let parts: Vec<&str> = port.split('-').collect();
+            if parts.len() == 2 {
+                parts[0].parse::<u16>().is_ok() && parts[1].parse::<u16>().is_ok()
+            } else {
+                false
+            }
+        }
+    }
+}
+
+// 持久化规则到文件
+async fn save_rules() -> Result<(), RuleError> {
+    let rules = RULES.lock().await;
+    let rules_vec = &*rules; // 获取对 Vec<Rule> 的引用
+    let json = serde_json::to_string_pretty(&rules_vec)?;
+    fs::write(RULES_FILE, json).await?;
+    Ok(())
+}
+
+// 从文件加载规则
+async fn load_rules() -> Result<(), RuleError> {
+    if let Ok(content) = fs::read_to_string(RULES_FILE).await {
+        let loaded_rules: Vec<Rule> = serde_json::from_str(&content)?;
+        let mut rules = RULES.lock().await;
+        *rules = loaded_rules;
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 初始化日志
+    tracing_subscriber::fmt::init();
+
+    // 加载已存在的规则
+    if let Err(e) = load_rules().await {
+        tracing::warn!("Failed to load rules: {}", e);
+    }
+
     // gzip compression layer
     let compression_layer = tower_http::compression::CompressionLayer::new();
 
     let app = Router::new()
         .route("/rules", get(get_rules))
         .route("/rules", post(add_rule))
+        .route("/rules", delete(delete_rule))
         .layer(compression_layer);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3500));
     let listener = TcpListener::bind(addr).await?;
 
-    println!("Server running on http://{}", addr);
+    tracing::info!("Server running on http://{}", addr);
     axum::serve(listener, app).await?;
     Ok(())
 }
