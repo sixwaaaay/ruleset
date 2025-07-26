@@ -50,7 +50,10 @@ impl IntoResponse for RuleError {
             RuleError::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             RuleError::JsonError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status, self.to_string()).into_response()
+        let body = Json(serde_json::json!({
+            "error": self.to_string()
+        }));
+        (status, body).into_response()
     }
 }
 
@@ -130,16 +133,14 @@ async fn get_rules() -> impl IntoResponse {
 }
 
 // 处理添加新规则的请求
-async fn add_rule(Json(rule): Json<Rule>) -> impl IntoResponse {
+async fn add_rule(Json(rule): Json<Rule>) -> Result<impl IntoResponse, RuleError> {
     // 验证规则
-    if let Err(e) = rule.validate() {
-        return (StatusCode::BAD_REQUEST, e.to_string()).into_response();
-    }
+    rule.validate()?;
 
     // 检查重复
     let mut rules = RULES.lock().await;
     if rules.contains(&rule) {
-        return (StatusCode::CONFLICT, "Rule already exists").into_response();
+        return Err(RuleError::DuplicateRule);
     }
 
     // 添加规则
@@ -147,31 +148,27 @@ async fn add_rule(Json(rule): Json<Rule>) -> impl IntoResponse {
     drop(rules); // 释放锁
 
     // 持久化存储
-    if let Err(e) = save_rules().await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-    }
+    save_rules().await?;
 
-    StatusCode::CREATED.into_response()
+    Ok(StatusCode::CREATED)
 }
 
 // 处理删除规则的请求
-async fn delete_rule(Json(rule): Json<Rule>) -> impl IntoResponse {
+async fn delete_rule(Json(rule): Json<Rule>) -> Result<impl IntoResponse, RuleError> {
     let mut rules = RULES.lock().await;
     let len = rules.len();
     rules.retain(|r| r != &rule);
 
     if rules.len() == len {
-        return (StatusCode::NOT_FOUND, "Rule not found").into_response();
+        return Err(RuleError::RuleNotFound);
     }
 
     drop(rules); // 释放锁
 
     // 持久化存储
-    if let Err(e) = save_rules().await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response();
-    }
+    save_rules().await?;
 
-    StatusCode::NO_CONTENT.into_response()
+    Ok(StatusCode::NO_CONTENT)
 }
 
 impl std::fmt::Display for RuleType {
