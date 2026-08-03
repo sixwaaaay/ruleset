@@ -51,33 +51,34 @@ deployment.
 
 ## Docker
 
-Two image variants are built by CI and pushed to Docker Hub
-(`docker.io/<dockerhub-user>/ruleset`):
+The image is a static musl binary on a tiny Alpine runtime, built multi-stage (Node
+frontend → Rust stage using [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild)
+for musl — no emulated compilation → Alpine runtime) and pushed to Docker Hub
+(`docker.io/<dockerhub-user>/ruleset`). CI builds `amd64` and `arm64` in two parallel jobs
+on native runners, each publishing its own platform tag (`-amd64` / `-arm64`):
 
-- `:latest` (musl) — `Dockerfile`, statically linked musl binary on a tiny Alpine runtime.
-- `:latest-glibc` — `Dockerfile.glibc`, glibc binary on a Debian slim runtime.
+- `:latest-amd64`, `:latest-arm64` (branch/tag pushes outside PRs)
+- `:v0.2.0-amd64`, `:v0.2.0-arm64` (on `v*` tag pushes)
 
-Both are multi-stage (Node stage for the frontend, Rust stage for the backend), run as a
-non-root user, and keep data in `/app/data` (volume). The web UI is embedded in the image.
+The image runs as a non-root user, keeps data in `/app/data` (volume), and embeds the web UI.
 
 ```bash
-docker build -t ruleset .                 # musl variant
-docker build -f Dockerfile.glibc -t ruleset:glibc .
+docker build --build-arg ZIG_ARCH=x86_64 --build-arg TARGET_TRIPLE=x86_64-unknown-linux-musl -t ruleset .
 
 # run with a named volume for persistence
 docker run -d --name ruleset -p 3500:3500 \
   -e ADMIN_TOKEN='choose-a-strong-token' \
   -v ruleset-data:/app/data \
-  ruleset
+  <dockerhub-user>/ruleset:latest-amd64
 ```
 
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push/PR:
-backend `fmt` + `clippy -D warnings` + `test`, frontend `build`, and a Docker matrix
-(`musl` + `glibc`, each `linux/amd64` + `linux/arm64`, pushed to Docker Hub
-on `main` and on `v*` tags). Tag pushes also tag the images with the tag name
-(`:v0.2.0`, `:v0.2.0-glibc`).
+backend `fmt` + `clippy -D warnings` + `test`, frontend `build`, and a Docker build —
+two parallel jobs (`linux/amd64` on `ubuntu-latest`, `linux/arm64` on the native arm64
+runner `ubuntu-24.04-arm`), each a multi-stage musl build with cargo-zigbuild, pushed to
+Docker Hub on `main` and on `v*` tags; PRs only build without pushing.
 
 ## API
 

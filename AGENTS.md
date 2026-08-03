@@ -57,9 +57,10 @@ cargo run                   # or ./target/release/ruleset
   exists but fails to parse, a `warn!` is logged and the service starts with no data.
 - Unit tests: `cargo test` (`#[cfg(test)]` module at the bottom of `src/main.rs`).
 - Lint: `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` (enforced by CI).
-- Docker images: `docker build -t ruleset .` (musl, `Dockerfile`: static musl binary, Alpine
-  runtime) and `docker build -f Dockerfile.glibc -t ruleset:glibc .` (glibc, Debian slim
-  runtime). Both are multi-stage, run as a non-root user, and use a data volume `/app/data`.
+- Docker image: `docker build -t ruleset .` — multi-stage (`Dockerfile`): Node stage builds
+  the frontend, a Rust stage cross-compiles a static musl binary with cargo-zigbuild for
+  both `x86_64` and `aarch64` (in parallel), Alpine runtime stage, non-root user, data
+  volume `/app/data`.
 - If no Rust toolchain is present in the environment, one can be installed repo-locally
   (`RUSTUP_HOME`/`CARGO_HOME` pointed at directories inside the repo; they are gitignored).
 
@@ -156,10 +157,11 @@ Notes:
 - Dependency changes: only add dependencies the project actually uses; commit `Cargo.lock`
   along with the change.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) runs backend `fmt`/`clippy -D warnings`/
-  `test`, frontend `build`, and a Docker matrix (`musl` + `glibc`, each amd64 + arm64, pushed
+  `test`, frontend `build`, and a Docker build: a multi-stage `Dockerfile` cross-compiles the
+  static musl binary with cargo-zigbuild (amd64 + arm64 in parallel) and the image is pushed
   to Docker Hub via the `DOCKERHUB_USER`/`DOCKERHUB_TOKEN` secrets on `main` and on `v*`
-  tags; PRs only build without pushing). Tag pushes also tag the images with the tag name
-  (`:v0.2.0`, `:v0.2.0-glibc`).
+  tags; PRs only build without pushing. Tag pushes also tag the image with the tag name
+  (`:v0.2.0`).
 
 ## Security model
 
