@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+
+# ===================== Stage 1: build the frontend =====================
+FROM node:22-alpine AS frontend-build
+WORKDIR /app/frontend
+# Copy manifests first so npm layer stays cached
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ===================== Stage 2: build the backend (static musl binary) =====================
+FROM rust:1-alpine AS backend-build
+RUN apk add --no-cache musl-dev
+WORKDIR /app
+# Copy manifests and sources first, warm the dependency cache with a dummy binary
+COPY Cargo.toml Cargo.lock ./
+COPY src/ ./src/
+RUN mkdir -p src/bin \
+    && printf 'fn main() {}\n' > src/bin/buildcache.rs \
+    && cargo build --release --bin buildcache || true
+RUN rm -f src/bin/buildcache.rs
+# Bundle the frontend output into the image so no mount is needed at runtime
+COPY --from=frontend-build /app/frontend/dist ./dist
+RUN cargo build --release --bin ruleset
+
+# ===================== Stage 3: runtime (Alpine) =====================
+FROM alpine:3.21 AS runtime
+RUN apk add --no-cache ca-certificates \
+    && adduser -D -u 10001 ruleset
+WORKDIR /app
+COPY --chown=ruleset:ruleset --from=backend-build /app/target/release/ruleset /usr/local/bin/ruleset
+COPY --chown=ruleset:ruleset --from=frontend-build /app/frontend/dist ./dist
+RUN mkdir -p /app/data && chown ruleset:ruleset /app/data
+
+ENV BIND_ADDR=0.0.0.0:3500 \
+    DATA_FILE=/app/data/rulesets.json \
+    FE_DIR=/app/dist
+
+VOLUME ["/app/data"]
+USER ruleset
+EXPOSE 3500
+ENTRYPOINT ["/usr/local/bin/ruleset"]

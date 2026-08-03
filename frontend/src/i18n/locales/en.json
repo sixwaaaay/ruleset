@@ -1,0 +1,68 @@
+{
+  "app": {
+    "title": "Rule Sets Manager"
+  },
+  "login": {
+    "description": "Sign in with the admin token printed by the server at startup (or configured via the ADMIN_TOKEN environment variable).",
+    "token": "Access token",
+    "tokenPlaceholder": "Access token",
+    "signIn": "Sign in",
+    "tokenRequired": "Please enter the access token"
+  },
+  "topbar": {
+    "tokenConfigured": "Token configured ({{count}} chars)",
+    "signOut": "Sign out"
+  },
+  "create": {
+    "title": "New ruleset",
+    "name": "Name",
+    "namePlaceholder": "e.g. Ads Block",
+    "slug": "Slug (optional)",
+    "slugPlaceholder": "e.g. ads",
+    "slugHint": "Lowercase letters, digits and hyphens.",
+    "submit": "New ruleset",
+    "nameRequired": "Please enter a ruleset name",
+    "success": "Ruleset \"{{name}}\" created"
+  },
+  "list": {
+    "emptyTitle": "No rulesets yet",
+    "emptyDescription": "Create one on the left to get started.",
+    "rulesCount": "{{count}} rules",
+    "deleteTitle": "Delete ruleset?",
+    "deleteDescription": "\"{{name}}\" and all of its rules will be permanently removed. This cannot be undone.",
+    "deleteAria": "Delete ruleset {{name}}",
+    "deleted": "Ruleset \"{{name}}\" deleted"
+  },
+  "detail": {
+    "noneTitle": "No ruleset selected",
+    "noneDescription": "Select or create a ruleset to edit it.",
+    "requireKey": "Require read key",
+    "protected": "protected",
+    "copyUrl": "Copy URL",
+    "urlHint": "Use this address as the rule subscription URL in your client. It is public (editing requires the admin token); with read protection on, requests without the key get nothing.",
+    "urlCopied": "Public URL copied to clipboard",
+    "copyFailed": "Copy failed; please copy manually",
+    "nameUpdated": "Name updated",
+    "protectOn": "Read protection enabled; the public URL was updated",
+    "protectOff": "Read protection disabled; the public URL no longer needs a key",
+    "rulesTitle": "Rules ({{count}})",
+    "noRules": "No rules yet",
+    "addFirstRule": "Add your first rule below.",
+    "type": "Type",
+    "value": "Value",
+    "actions": "Actions",
+    "valuePlaceholder": "Rule value, e.g. example.com",
+    "addRule": "Add rule",
+    "valueRequired": "Please enter a rule value",
+    "ruleAdded": "Rule added",
+    "ruleDeleted": "Rule deleted"
+  },
+  "auth": {
+    "expired": "Token is invalid or expired; please sign in again",
+    "requestFailed": "Request failed (HTTP {{status}})"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

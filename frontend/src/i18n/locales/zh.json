@@ -1,0 +1,68 @@
+{
+  "app": {
+    "title": "规则集管理"
+  },
+  "login": {
+    "description": "使用服务器启动时打印的管理员令牌登录（或通过 ADMIN_TOKEN 环境变量配置）。",
+    "token": "访问令牌",
+    "tokenPlaceholder": "访问令牌",
+    "signIn": "登录",
+    "tokenRequired": "请输入访问令牌"
+  },
+  "topbar": {
+    "tokenConfigured": "令牌已配置（{{count}} 字符）",
+    "signOut": "退出登录"
+  },
+  "create": {
+    "title": "新建规则集",
+    "name": "名称",
+    "namePlaceholder": "例如：广告拦截",
+    "slug": "Slug（可选）",
+    "slugPlaceholder": "例如：ads",
+    "slugHint": "小写字母、数字和连字符。",
+    "submit": "新建规则集",
+    "nameRequired": "请输入规则集名称",
+    "success": "规则集“{{name}}”已创建"
+  },
+  "list": {
+    "emptyTitle": "还没有规则集",
+    "emptyDescription": "在左侧创建一个规则集。",
+    "rulesCount": "{{count}} 条规则",
+    "deleteTitle": "删除规则集？",
+    "deleteDescription": "“{{name}}”及其所有规则将被永久删除，此操作无法撤销。",
+    "deleteAria": "删除规则集 {{name}}",
+    "deleted": "规则集“{{name}}”已删除"
+  },
+  "detail": {
+    "noneTitle": "未选择规则集",
+    "noneDescription": "选择或创建一个规则集进行编辑。",
+    "requireKey": "需要读取密钥",
+    "protected": "已保护",
+    "copyUrl": "复制链接",
+    "urlHint": "在客户端中将此地址用作规则订阅链接。该链接是公开的（编辑需要管理员令牌）；开启读取保护后，没有密钥的请求将无法访问。",
+    "urlCopied": "公开链接已复制到剪贴板",
+    "copyFailed": "复制失败，请手动复制",
+    "nameUpdated": "名称已更新",
+    "protectOn": "已启用读取保护，公开链接已更新",
+    "protectOff": "已关闭读取保护，公开链接不再需要密钥",
+    "rulesTitle": "规则（{{count}}）",
+    "noRules": "还没有规则",
+    "addFirstRule": "在下方添加第一条规则。",
+    "type": "类型",
+    "value": "值",
+    "actions": "操作",
+    "valuePlaceholder": "规则值，例如 example.com",
+    "addRule": "添加规则",
+    "valueRequired": "请输入规则值",
+    "ruleAdded": "规则已添加",
+    "ruleDeleted": "规则已删除"
+  },
+  "auth": {
+    "expired": "令牌无效或已过期，请重新登录",
+    "requestFailed": "请求失败（HTTP {{status}}）"
+  },
+  "common": {
+    "cancel": "取消",
+    "delete": "删除"
+  }
+}
