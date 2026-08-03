@@ -15,4 +15,4 @@ ipnet = "2.9"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-getrandom = "0.3"
+getrandom = "0.4"
