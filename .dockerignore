@@ -1,0 +1,13 @@
+.git
+.gitignore
+.agents
+.rustup
+.cargo
+target
+rulesets.json
+skills-lock.json
+README.md
+AGENTS.md
+.github
+frontend/node_modules
+frontend/dist
