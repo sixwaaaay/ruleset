@@ -37,8 +37,8 @@ jobs:
       - run: npm run build
 
   docker:
-    name: Docker image (${{ matrix.libc }})
-    runs-on: ubuntu-latest
+    name: Docker image (musl, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -46,15 +46,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - libc: musl
-            dockerfile: Dockerfile
-            tag-suffix: ''
-          - libc: glibc
-            dockerfile: Dockerfile.glibc
-            tag-suffix: '-glibc'
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            zig-arch: x86_64
+            triple: x86_64-unknown-linux-musl
+            tag-suffix: amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            zig-arch: aarch64
+            triple: aarch64-unknown-linux-musl
+            tag-suffix: arm64
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
@@ -64,9 +69,12 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            ZIG_ARCH=${{ matrix.zig-arch }}
+            TARGET_TRIPLE=${{ matrix.triple }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.DOCKERHUB_USER }}/ruleset:${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}${{ matrix.tag-suffix }}
-            ${{ secrets.DOCKERHUB_USER }}/ruleset:${{ github.sha }}${{ matrix.tag-suffix }}
+            ${{ secrets.DOCKERHUB_USER }}/ruleset:${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}-${{ matrix.tag-suffix }}
+            ${{ secrets.DOCKERHUB_USER }}/ruleset:${{ github.sha }}-${{ matrix.tag-suffix }}
