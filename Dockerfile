@@ -25,7 +25,7 @@ COPY --from=frontend-build /app/frontend/dist ./dist
 RUN cargo build --release --bin ruleset
 
 # ===================== Stage 3: runtime (Alpine) =====================
-FROM alpine:3.21 AS runtime
+FROM alpine:3.24 AS runtime
 RUN apk add --no-cache ca-certificates \
     && adduser -D -u 10001 ruleset
 WORKDIR /app
